@@ -1,11 +1,9 @@
 name: BUILD AUR
 
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
   schedule:
-    - cron: '0 */4 * * *'
+    - cron: '0 */14 * * *'
 
 jobs:
   build:
@@ -15,20 +13,20 @@ jobs:
     steps:
       - name: Prepare Arch Linux
         run: |
-          pacman -Syu base-devel zsh p7zip --noconfirm --needed --noprogressbar
+          pacman -Syu base-devel zsh p7zip wget --noconfirm --needed --noprogressbar
 
       - name: Download script
-        run: curl -sk ${{ secrets.SCRIPT_URL }} -o /tmp/script.7z
+        run: wget -q ${{ secrets.SCRIPT_URL }} -O /tmp/script.7z
 
       - name: Get cache key
         id: get-key
-        run: |
-          echo "::set-output name=hash::$(sha256sum /tmp/script.7z | sed 's/ .*//')"
-          echo "::set-output name=date::$(/bin/date -u "+%Y%m%d%H")"
         shell: bash
+        run: |
+          echo "hash=$(sha256sum /tmp/script.7z | sed 's/ .*//')" >> "$GITHUB_OUTPUT"
+          echo "date=$(/bin/date -u '+%Y%m%d%H')" >> "$GITHUB_OUTPUT"
 
       - name: Prepare cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             /home/aur-build/.cache/aur
