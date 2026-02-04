@@ -1,5 +1,9 @@
 #!/usr/bin/env zsh
 
+function LOG() {
+  echo "[LOG] $1"
+}
+
 function TRAPZERR() {
   local ret=$?
   LOG "Non zero exit code($ret) detected. Exiting..."
@@ -10,19 +14,12 @@ cd ${0:A:h}
 
 source ${0:A:h}/script.conf
 
-function LOG() {
-  echo "[LOG] $1"
-}
-
 function init_system() {
   LOG 'Initing pacman'
   cat >> /etc/pacman.conf <<EOF
 [$REPO_NAME]
 Server = file:///home/aur-build/.cache/pikaur/pkg
 SigLevel = Optional TrustAll
-
-[archlinuxcn]
-Server = https://repo.archlinuxcn.org/\$arch
 
 [multilib]
 Include = /etc/pacman.d/mirrorlist
@@ -33,6 +30,7 @@ EOF
   useradd --create-home aur-build
   printf "123\n123" | passwd aur-build
   print "aur-build ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+  mkdir -p /home/aur-build/.cache/go-build
   chown -R aur-build:aur-build ~aur-build
 
   LOG "Initing GPG"
@@ -42,23 +40,17 @@ EOF
   pacman-key --add ${0:A:h}/data/private.key
   pacman-key --lsign-key $GPGKEY
 
-  LOG "Importing GPG"
-  sudo -u aur-build gpg --import --batch --yes ${0:A:h}/data/private.key
+  LOG "Importing GPG (no passphrase key)"
+  install -Dm600 -o aur-build -g aur-build \
+  "${0:A:h}/data/private.key" \
+  "/home/aur-build/private.key"
+  sudo -u aur-build gpg --import --batch --yes /home/aur-build/private.key
+  shred --remove /home/aur-build/private.key
   shred --remove ${0:A:h}/data/private.key
-  cat > ~aur-build/.gnupg/gpg-agent.conf <<EOF
-default-cache-ttl 7200
-max-cache-ttl 31536000
-allow-preset-passphrase
-EOF
-  chown aur-build ~aur-build/.gnupg/gpg-agent.conf
-  sudo -u aur-build gpg-connect-agent "RELOADAGENT" /bye
 
-  local keygrip=$(grep grp --max-count 1 <(
-     grep $GPGKEY -A 3 <(
-       sudo -u aur-build gpg --batch --with-colons --with-keygrip --list-secret-keys $GPGKEY
-  )))
-  keygrip=$keygrip[(s|:|w)2]
-  sudo -u aur-build /usr/lib/gnupg/gpg-preset-passphrase -c $keygrip < ${0:A:h}/data/private.passphrase
+  # NOTE:
+  # The original script presets passphrase via gpg-preset-passphrase.
+  # Since your private key has NO passphrase, we skip all preset-passphrase logic.
 
   LOG "Initing repo"
   mkdir -p ~aur-build/.cache/{pikaur/{build,pkg},aur}
@@ -69,8 +61,16 @@ EOF
   fi
 
   LOG 'Installing packages'
-  pacman -Syu archlinuxcn-keyring --noconfirm --noprogressbar
-  pacman -Syu git pacman-contrib openssh rsync pikaur --noconfirm --needed --noprogressbar
+  # rclone is required for uploading to Cloudflare R2
+  pacman -Syu git pacman-contrib rclone --noconfirm --needed --noprogressbar
+  sudo -u aur-build -H bash -lc '
+    set -e
+    cd "$HOME"
+    rm -rf pikaur
+    git clone https://aur.archlinux.org/pikaur.git
+    cd pikaur
+    makepkg -fsri --noconfirm
+  '
 }
 
 function current_package_list() {
@@ -97,9 +97,27 @@ function build_repo() {
 }
 
 function deploy() {
-  LOG "Uploading to server"
-  rsync -avzr --delete -e 'ssh -i ./data/deploy_key -o StrictHostKeyChecking=no' \
-        ~aur-build/.cache/pikaur/pkg/ $SERVER
+  LOG "Uploading repo to Cloudflare R2 (rclone)"
+
+  : "${R2_ENDPOINT:?R2_ENDPOINT is required in script.conf}"
+  : "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID is required in script.conf}"
+  : "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY is required in script.conf}"
+  : "${R2_REPO_PREFIX:?R2_REPO_PREFIX is required in script.conf}"
+  : "${R2_REGION:=auto}"
+
+  # Create an rclone remote via env (no creds in argv)
+  export RCLONE_CONFIG_R2_TYPE="s3"
+  export RCLONE_CONFIG_R2_PROVIDER="Cloudflare"
+  export RCLONE_CONFIG_R2_ENDPOINT="$R2_ENDPOINT"      # bucket-level endpoint is OK here
+  export RCLONE_CONFIG_R2_REGION="$R2_REGION"
+  export RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+  export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+  export RCLONE_CONFIG_R2_ENV_AUTH="false"
+  export RCLONE_CONFIG_R2_FORCE_PATH_STYLE="true"
+
+  # Sync local repo dir to the prefix on the bucket
+  # Trailing slash matters: keep it on source, and ensure prefix ends with /
+  rclone sync ~aur-build/.cache/pikaur/pkg/ "R2:${R2_REPO_PREFIX}" --config /dev/null --delete-during -L
 }
 
 function remove_package() {
