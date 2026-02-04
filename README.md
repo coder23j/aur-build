@@ -1,4 +1,4 @@
-# Build AUR
+# Build AUR upload to cloudflare r2
 
 ∠( ᐛ 」∠)＿
 
