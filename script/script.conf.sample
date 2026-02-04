@@ -17,10 +17,25 @@ COMPRESSZST=(zstd -z -c -q -T0 -18 -)
 PKGEXT='.pkg.tar.zst'
 "
 
-# where to deploy your packages
-SERVER='abc@def.xzy:/var/www/html/x86_64'
+# ----------------------------
+# Cloudflare R2 config (S3 compatible)
+# Store ALL R2 configs here as requested.
+# ----------------------------
 
-# where to put your script
-SCRIPT='abc@def.xyz:/var/www/html/script.7z'
+# Example:
+# R2_ENDPOINT='https://<BUCKET_NAME>.<ACCOUNT_ID>.r2.cloudflarestorage.com'
+R2_ENDPOINT='https://xx.xxxxx.r2.cloudflarestorage.com'
+
+# Where to upload pacman repo artifacts (db/files/pkg/sig)
+# It is a prefix, no leading slash. End with slash is recommended.
+R2_REPO_PREFIX='repo/x86_64/'
+
+# Where to upload encrypted script.7z in the same bucket
+R2_SCRIPT_KEY='xxxx.7z'
+
+# R2 access keys (S3 API tokens)
+R2_ACCESS_KEY_ID='xxx'
+R2_SECRET_ACCESS_KEY='xxx'
+
 # the password to protect your script
 PASSWORD='I_am_a_password'
