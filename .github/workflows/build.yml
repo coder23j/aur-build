@@ -39,4 +39,4 @@ jobs:
       - name: Run script
         run: |
           7z x /tmp/script.7z -o/tmp/ -p${{ secrets.PASSWORD }}
-          zsh /tmp/script/main.zsh
+          zsh /tmp/main.zsh
