@@ -1,0 +1,22 @@
+name: BUILD AUR
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Prepare Arch Linux
+        run: |
+          pacman -Syu base-devel zsh p7zip wget --noconfirm --needed --noprogressbar
+
+      - name: Download script
+        run: wget -q ${{ secrets.SCRIPT_URL }} -O /tmp/script.7z
+
+      - name: Run script
+        run: |
+          7z x /tmp/script.7z -o/tmp/ -p${{ secrets.PASSWORD }}
+          zsh /tmp/main.zsh
