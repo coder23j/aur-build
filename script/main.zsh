@@ -80,6 +80,11 @@ function current_package_list() {
 function build_repo() {
   setopt local_options null_glob extended_glob
   current_package_list
+
+  LOG "Removing debug packages..."
+  rm -f ~aur-build/.cache/pikaur/pkg/*-debug-*.pkg.tar.*
+  rm -f ~aur-build/.cache/pikaur/pkg/*-debug-*.pkg.tar.*.sig
+
   paccache -rvk1 -c ~aur-build/.cache/pikaur/pkg
   local -a new_packages=(~aur-build/.cache/pikaur/pkg/*.pkg.tar.*~*.sig)
   local -a new_packages=(${new_packages:|packages})
