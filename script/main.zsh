@@ -17,9 +17,6 @@ source ${0:A:h}/script.conf
 function init_system() {
   LOG 'Initing pacman'
   cat >> /etc/pacman.conf <<EOF
-[$REPO_NAME]
-Server = file:///home/aur-build/.cache/pikaur/pkg
-SigLevel = Optional TrustAll
 
 [multilib]
 Include = /etc/pacman.d/mirrorlist
