@@ -1,4 +1,4 @@
-name: BUILD AUR
+name: nocache BUILD AUR
 
 on:
   workflow_dispatch:
