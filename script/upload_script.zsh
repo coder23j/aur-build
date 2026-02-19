@@ -20,7 +20,7 @@ command -v rclone >/dev/null 2>&1 || { echo "rclone not found"; exit 1; }
 
 rm -f /tmp/script.7z
 LOG "Packing script directory to /tmp/script.7z"
-7z a /tmp/script.7z -mhe=on -p$PASSWORD ${0:A:h}
+7z a /tmp/script.7z -mhe=on -p"$PASSWORD" ./ -xr!${0:A:h}/disabled
 
 # ---- rclone S3 backend via env vars (no creds in argv) ----
 # These env vars are supported by rclone's S3 backend config.
