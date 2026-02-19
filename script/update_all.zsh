@@ -63,6 +63,45 @@ function need_update() {
   return $ret
 }
 
+function import_validpgpkeys() {
+  local pkgbuild="$1"
+  [[ -f "$pkgbuild" ]] || return 0
+
+  LOG "Checking validpgpkeys in $pkgbuild"
+
+  # 确保 gnupg 目录存在
+  mkdir -p ~/.gnupg
+  chmod 700 ~/.gnupg
+
+  # 配置 keyserver（避免 gpg 找不到服务器）
+  if [[ ! -f ~/.gnupg/gpg.conf ]]; then
+    cat > ~/.gnupg/gpg.conf <<EOF
+keyserver hkps://keyserver.ubuntu.com
+keyserver-options auto-key-retrieve
+EOF
+  fi
+
+  # 在子 shell 里 source PKGBUILD，避免污染当前环境
+  local -a keys
+  keys=($(bash -c "
+    source '$pkgbuild'
+    printf '%s\n' \"\${validpgpkeys[@]}\"
+  "))
+
+  # 没有 keys 就直接跳过
+  if (( ${#keys[@]} == 0 )); then
+    LOG "No validpgpkeys found, skip."
+    return 0
+  fi
+
+  LOG "Importing PGP keys: ${keys[*]}"
+
+  for k in "${keys[@]}"; do
+    [[ -n "$k" ]] || continue
+    gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "$k" || true
+  done
+}
+
 function build_packages() {
   setopt local_options null_glob
   for package in $PROJECT_ROOT/packages/*; do
@@ -88,6 +127,7 @@ function build_packages() {
       else
         cp -r $package $aur_dir
       fi
+      import_validpgpkeys "$aur_dir/PKGBUILD"
       echo Y | pikaur -P --mflags=--noprogressbar $aur_dir/PKGBUILD || ret=1
     fi
     # 确认成功构建后更新时间戳
